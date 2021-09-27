@@ -8,6 +8,8 @@
   Example:
   ./program wave.dat 100
 
+  Technique used: I/O Multiplexing
+
   Created by Kevin Perez
 */
 #include <stdio.h>
@@ -49,8 +51,6 @@ int main(int argc, char** argv)
     // Create wavefile. File overwritten if it exists.
     FILE * wavefile = fopen(argv[1], "w");
     
-    char c;
-    
     char buffer[MAX_CHAR_PER_SEC];
 
     struct termios ttystate;
@@ -67,7 +67,7 @@ int main(int argc, char** argv)
     // (noncanonical) input queue in order for read to return. 
     ttystate.c_cc[VMIN] = 1;
     
-    //set the terminal attributes.
+    // set the terminal attributes associated with STDIN
     tcsetattr(STDIN_FILENO, TCSANOW, &ttystate);
 
     while ( total_samples-- > 0 )
@@ -75,16 +75,16 @@ int main(int argc, char** argv)
 	int space_bar_pressed = 0;
 	sleep(1);
 
-	struct timeval timeout;
-	fd_set readfds;
-
 	// timeframe to block before stdin file descriptor becomes ready
+	struct timeval timeout;
 	timeout.tv_sec = 0;
 	timeout.tv_usec = 0;
 	
-	FD_ZERO(&readfds);
-	FD_SET(STDIN_FILENO, &readfds);
-	select(STDIN_FILENO+1, &readfds, NULL, NULL, &timeout);
+	fd_set readfds;
+	FD_ZERO(&readfds); // clear file descriptor set
+	FD_SET(STDIN_FILENO, &readfds); // add file descriptor to set
+	
+	select(STDIN_FILENO + 1, &readfds, NULL, NULL, &timeout);
 
 	// if STDIN is ready for reading
 	if ( FD_ISSET(STDIN_FILENO, &readfds) )
@@ -92,7 +92,8 @@ int main(int argc, char** argv)
 	    initialize_input_buffer(buffer);
 	    read(STDIN_FILENO, buffer, 100);
 
-	    // Check if spacebar has been pressed within the past second
+	    // Check if spacebar has been pressed at least once
+	    // within the past second
 	    for ( int buf_it = 0; buf_it < MAX_CHAR_PER_SEC; ++buf_it)
 	    {
 		if ( buffer[buf_it] == TARGET_KEY )
@@ -105,19 +106,13 @@ int main(int argc, char** argv)
 
 	if ( space_bar_pressed == 1 )
 	{
-	    printf("Spacebar has been pressed within the past second\n");
 	    fputs("1\n", wavefile);
 	}
 	else
 	{
-	    printf("Spacebar not pressed.\n");
 	    fputs("0\n", wavefile);
 	}
     }
-
-    ttystate.c_lflag |= ICANON;
-    //set the terminal attributes.
-    tcsetattr(STDIN_FILENO, TCSANOW, &ttystate);
     
     return 0;
 }
